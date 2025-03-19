@@ -171,7 +171,7 @@ def get_dashboard_analytics(
     if not has_permission(current_user, workspace_id):
         raise HTTPException(403, "Forbidden")
     
-    # Rata - rata progress proyek
+    # Rata - rata progress proyek.
     avg_progress = supabase.table("project_analytics").select("avg(progress)").eq("workspace_id", workspace_id).execute()
     
     # Jumlah karyawan dengan skor diatas 80
