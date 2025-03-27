@@ -36,6 +36,7 @@ def get_contracts(
 def create_contracts(
     workspace_id: int,
     title: str,
+    contact_id: str,
     customer_id: str,
     start_date: str,
     end_date:str,
@@ -49,6 +50,11 @@ def create_contracts(
 ):
     if not has_permission(current_user, workspace_id):
         raise HTTPException(403, "Forbidden")
+    
+    # validasi contact ada di workspace
+    contact = supabase.table("crm_contacts").select("id").eq("id", contact_id).eq("workspace_id", workspace_id).execute()
+    if not contact.data:
+        raise HTTPException(400, "Contact not found")
     
     # Validasi customer dan project
     customer = supabase.table("customers").select("id").eq("id", customer_id).eq("workspace_id", workspace_id).execute()
@@ -151,3 +157,35 @@ def trigger_auto_update(
     current_date = datetime.now().date().isoformat()
     response = supabase.table("contracts").update({"status": "expired"}).lt("end_date", current_date).execute()
     return {"message": f"{len(response.data)} contracts updated to expired!"}
+
+@router.get("/{workspace_id}/contracts/{contract_id}/crm")
+def get_contract_crm_data(
+    workspace_id: int,
+    contract_id: str,
+    current_user: dict = Depends(get_current_user),
+    supabase: Client = Depends(get_supabase)
+):
+    if not has_permission(current_user, workspace_id):
+        raise HTTPException(403, "Forbidden")
+    
+    response = supabase.table("contracts").select(
+        "contact_id, crm_contacts!inner(*)" # Join dengan contact
+    ).eq("id", contract_id).execute()
+    
+    return response.data[0]
+
+@router.get("/{workspace_id}/contracts/{contract_id}/invoices")
+def get_contract_invoices(
+    workspace_id: int,
+    contract_id: str,
+    current_user: dict = Depends(get_current_user),
+    supabase: Client = Depends(get_supabase)
+):
+    if not has_permission(current_user, workspace_id):
+        raise HTTPException(403, "Forbidden")
+    
+    response = supabase.table("invoices").select(
+        "id, amount, due_date, status"
+    ).eq("contract_id", contract_id).eq("workspace_id", workspace_id).execute()
+    
+    return response.data
