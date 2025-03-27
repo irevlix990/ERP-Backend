@@ -139,9 +139,17 @@ def get_workspace_analytics(
         "employee_id, performance_score, task_completion, evaluations"
     ).eq("workspace_id", workspace_id).execute()
     
+    # CRM Metrics
+    crm_metrics = {
+        "total_contacts": supabase.table("crm_contacts").count().eq("workspace_id", workspace_id).execute().data[0]["count"],
+        "total_oppotunities": supabase.table("crm_opportunities").count().eq("workspace_id", workspace_id).execute().data[0]["count"],
+        "recent_interactions": supabase.table("crm_interactions").select("*").eq("workspace_id", workspace_id).order("interaction_date", desc=True).limit(10).execute().data
+    }
+    
     return {
         "projects": project_analytics.data,
-        "employees": employee_analytics.data
+        "employees": employee_analytics.data,
+        "crm": crm_metrics
     }
     
 @router.get("/{workspace_id}/analytics/projects")
@@ -171,13 +179,32 @@ def get_dashboard_analytics(
     if not has_permission(current_user, workspace_id):
         raise HTTPException(403, "Forbidden")
     
-    # Rata - rata progress proyek.
+    # Rata - rata progress proyek
     avg_progress = supabase.table("project_analytics").select("avg(progress)").eq("workspace_id", workspace_id).execute()
     
     # Jumlah karyawan dengan skor diatas 80
     top_employees = supabase.table("employee_analytics").select("employee_id").eq("workspace_id", workspace_id).execute()
     
+    # Metrik CRM
+    crm_metrics = {
+        "total_contacts": supabase.table("crm_contacts").count().eq("workspace_id", workspace_id).execute(),
+        "total_opportunities": supabase.table("crm_opportunities").count().eq("workspace_id", workspace_id).execute(),
+        "recent_interactions": supabase.table("crm_interactions").select(
+            "id, contact_id, type, notes, interaction_date"
+        ).eq("workspace_id", workspace_id).order("interaction_date", desc=True).limit(10).execute()
+    }
+    
+    # Metrik Invoice
+    invoice_metrics = {
+        "total_invoices": supabase.table("invoices").count().eq("workspace_id", workspace_id).execute().data[0]["count"],
+        "overdue_invoices": supabase.table("invoices").count().eq("workspace_id", workspace_id).eq("status", "pending").lt("due_date", datetime.now().date().isoformat()).execute().data[0]["count"],
+        "total_amount_owed": supabase.table("invoices").select("sum(amount)").eq("workspace_id", workspace_id).eq("status", "pending").execute().data[0]["sum"],
+        "paid_amount": supabase.table("invoices").select("sum(amount)").eq("workspace_id", workspace_id).eq("status", "paid").execute()
+    }
+    
     return {
         "average_project_progress": avg_progress.data[0]["avg"] if avg_progress.data else 0,
-        "top_employees_count": len(top_employees.data)
+        "top_employees_count": len(top_employees.data),
+        "crm": crm_metrics,
+        "invoices": invoice_metrics
     }
