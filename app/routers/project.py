@@ -21,12 +21,19 @@ def get_projects(
 def create_project(
     workspace_id: int,
     name: str,
+    contact_id: str = None, # Baru: terkait CRM contact
     description: str = None,
     current_user: dict = Depends(get_current_user),
     supabase: Client = Depends(get_supabase)
 ):
     if not has_permission(current_user, workspace_id):
         raise HTTPException(403, "Forbidden")
+    
+    if contact_id:
+        # validasi contact ada di workspace
+        contact = supabase.table("crm_contacts").select("id").eq("id", contact_id).eq("workspace_id", workspace_id).execute()
+        if not contact.data:
+            raise HTTPException(400, "Contact not found")
     
     data = {
         "name": name,
@@ -93,3 +100,36 @@ def get_project_contracts(
         "*"
     ).eq("workspace_id", workspace_id).eq("project_id", project_id).execute()
     return response.data
+
+@router.get("/{workspace_id}/projects/{project_id}/crm")
+def get_project_crm(
+    workspace_id: int,
+    project_id: str,
+    current_user: dict = Depends(get_current_user),
+    supabase: Client = Depends(get_supabase)
+):
+    if not has_permission(current_user, workspace_id):
+        raise HTTPException(403, "Forbidden")
+    
+    response = supabase.table("projects").select(
+        "contact_id, contracts!inner(*)" # Join dengan kontrak
+    ).eq("id", project_id).eq("workspace_id", workspace_id).execute()
+    
+    return response.data[0]
+
+@router.get("/{workspace_id}/projects/{project_id}/invoices")
+def get_project_invoices(
+    workspace_id: int,
+    project_id: str,
+    current_user: dict = Depends(get_current_user),
+    supabase: Client = Depends(get_supabase)
+):
+    if not has_permission(current_user, workspace_id):
+        raise HTTPException(403, "Forbidden")
+    
+    response = supabase.table("invoices").select(
+        "id, amount, due_date, status"
+    ).eq("project_id", project_id).eq("workspace_id", workspace_id).execute()
+    
+    return response.data
+    
